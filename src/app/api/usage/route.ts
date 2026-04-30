@@ -1,9 +1,10 @@
-import { createClient } from '~/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseServer } from '~/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const supabase = await createClient()
+    const supabase = await createSupabaseServer()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -39,8 +40,11 @@ export async function GET() {
 // Reset usage (called monthly via cron)
 export async function POST() {
   try {
-    // This would be called by a cron job to reset monthly usage
-    // For now, we'll leave it as an internal function
+    // Create admin client
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
     
     // Reset all free users' proposal counts
     const { error } = await supabaseAdmin
