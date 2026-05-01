@@ -5,7 +5,7 @@ import { cn } from '~/lib/utils'
 
 interface TabsContextValue {
   value: string
-  onChange: (value: string) => void
+  onValueChange: (value: string) => void
 }
 
 const TabsContext = React.createContext<TabsContextValue | undefined>(undefined)
@@ -24,8 +24,8 @@ interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
-  ({ className, value, onChange, ...props }, ref) => (
-    <TabsContext.Provider value={{ value, onChange }}>
+  ({ className, value, onValueChange, ...props }, ref) => (
+    <TabsContext.Provider value={{ value, onValueChange }}>
       <div ref={ref} className={cn('', className)} {...props} />
     </TabsContext.Provider>
   )
@@ -52,7 +52,7 @@ interface TabsTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
 
 const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
   ({ className, value: triggerValue, ...props }, ref) => {
-    const { value, onChange } = useTabs()
+    const { value, onValueChange } = useTabs()
     const isActive = value === triggerValue
 
     return (
@@ -62,7 +62,7 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
         role="tab"
         aria-selected={isActive}
         data-state={isActive ? 'active' : 'inactive'}
-        onClick={() => onChange(triggerValue)}
+        onClick={() => onValueChange(triggerValue)}
         className={cn(
           'inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all duration-200',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2',
