@@ -1,10 +1,6 @@
 import { createClient } from '~/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
-})
+import { PLANS, createPaymentSession, createCustomer } from '~/lib/flutterwave'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,58 +14,59 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { plan } = body // 'pro' or 'team'
 
-    const priceId = plan === 'team' 
-      ? process.env.STRIPE_TEAM_PRICE_ID
-      : process.env.STRIPE_PRO_PRICE_ID
-
-    if (!priceId) {
+    if (!PLANS[plan as keyof typeof PLANS]) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }
 
-    // Get or create Stripe customer
+    const planDetails = PLANS[plan as keyof typeof PLANS]
+
+    // Get user profile for email
     const { data: profile } = await supabase
       .from('profiles')
-      .select('stripe_customer_id, email')
+      .select('email, full_name, flutterwave_customer_id')
       .eq('id', user.id)
       .single()
 
-    let customerId = profile?.stripe_customer_id
+    // Create or use existing Flutterwave customer
+    let customerId = profile?.flutterwave_customer_id
 
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: profile?.email || user.email,
-        metadata: {
-          supabase_user_id: user.id,
-        },
+      const customer = await createCustomer({
+        email: profile?.email || user.email!,
+        name: profile?.full_name || user.email!.split('@')[0],
+        country: 'KE',
       })
-      customerId = customer.id
 
-      await supabase
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id)
+      if (customer.status === 'success' && customer.data?.id) {
+        customerId = customer.data.id.toString()
+
+        await supabase
+          .from('profiles')
+          .update({ flutterwave_customer_id: customerId })
+          .eq('id', user.id)
+      }
     }
 
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?canceled=true`,
-      metadata: {
-        user_id: user.id,
-        plan,
-      },
+    // Create payment session
+    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?success=true&plan=${plan}`
+    
+    const paymentResponse = await createPaymentSession({
+      email: profile?.email || user.email!,
+      name: profile?.full_name || user.email!.split('@')[0],
+      amount: planDetails.amount,
+      plan,
+      userId: user.id,
+      redirectUrl,
     })
 
-    return NextResponse.json({ url: session.url })
+    if (paymentResponse.status === 'success' && paymentResponse.data?.link) {
+      return NextResponse.json({ url: paymentResponse.data.link })
+    } else {
+      return NextResponse.json(
+        { error: paymentResponse.message || 'Failed to create payment session' },
+        { status: 500 }
+      )
+    }
   } catch (error: any) {
     console.error('Checkout error:', error)
     return NextResponse.json(

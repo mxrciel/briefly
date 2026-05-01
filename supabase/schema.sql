@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'team')),
     stripe_customer_id TEXT,
     stripe_subscription_id TEXT,
+    flutterwave_customer_id TEXT,
+    flutterwave_subscription_id TEXT,
     proposals_used INT DEFAULT 0,
     proposals_limit INT DEFAULT 5,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -126,3 +128,14 @@ DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- Add flutterwave columns if they don't exist (for existing databases)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'flutterwave_customer_id') THEN
+        ALTER TABLE public.profiles ADD COLUMN flutterwave_customer_id TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'flutterwave_subscription_id') THEN
+        ALTER TABLE public.profiles ADD COLUMN flutterwave_subscription_id TEXT;
+    END IF;
+END $$;
